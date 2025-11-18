@@ -1,11 +1,12 @@
+// This line must come before importing any instrumented module.
+const tracer = require('dd-trace').init()
+const path = require('path');
+const webpack = require('webpack');
 const express = require("express");
 const serverless = require("serverless-http");
 const bodyParser = require("body-parser");
 const { v4: uuidv4 } = require("uuid");
 const https = require("https");
-
-const tracker = require("@middleware.io/node-apm");
-const tracer = tracker.getTracer("testTRacer", "2.0.0");
 
 function getRequest() {
   const url = "https://opentelemetry.io/";
@@ -71,14 +72,10 @@ function delay(ms) {
 
 // Read one
 app.get("/items/:id", (req, res) => {
-  tracker.info("Sample Express app Info log");
-  tracker.warn("Sample Express app Warn log");
-  tracker.debug("Sample Express app Debug log");
-  tracker.error("Sample Express app Error log");
   try {
     throw new Error("oh items not found errorerror!");
   } catch (e) {
-    tracker.errorRecord(e);
+
   }
   const item = items.find((item) => item.id === req.params.id);
   if (item) {
@@ -121,5 +118,26 @@ app.listen(3000, () => {
   console.log("server staretd on 3000");
 });
 
-// Lambda handler
-module.exports.handler = serverless(app);
+module.exports = {
+  target: 'node',
+  entry: './index.js',
+  mode: 'production',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'bundle.js',
+    libraryTarget: 'commonjs2',
+  },
+  externals: [
+    'express',
+    'dd-trace',
+  ],
+  plugins: [
+    new webpack.BannerPlugin({
+      raw: true,
+      entryOnly: true,
+      banner:
+        `process.env.DD_GIT_REPOSITORY_URL=${process.env.DD_GIT_REPOSITORY_URL};` +
+        `process.env.DD_GIT_COMMIT_SHA=${process.env.DD_GIT_COMMIT_SHA};`,
+    }),
+  ],
+};
